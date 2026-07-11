@@ -32,7 +32,7 @@ _ADAPTER_STATE: dict[str, Any] = {"adapter": None, "client": None}
 _STATE_LOCK = threading.Lock()
 
 
-def _import_tdx_chronos():
+def _import_tdx_chronos() -> tuple[Any, Any]:
     """Import the tdx_chronos client module without raising when missing.
 
     Returns the module object, or ``None`` when the package isn't installed
@@ -43,7 +43,7 @@ def _import_tdx_chronos():
     except Exception as exc:
         logger.debug("tdx_chronos not importable: %s", exc)
         return None, None
-    return TdxChronos, None  # type: ignore[return-value]
+    return TdxChronos, None
 
 
 def _resolve_data_dir() -> str | None:
@@ -123,22 +123,33 @@ class _TdxAdapter:
 
     # --- caches ---------------------------------------------------------------
 
+    def _populate_caches(self) -> None:
+        """Populate both known-symbol caches from the client.
+
+        Must be called with :attr:`_known_lock` held. Kept lock-free here so
+        it can be invoked from either cache loader without triggering
+        re-entrant deadlock on the non-reentrant ``_known_lock`` (a single
+        thread calling ``_load_etf_cache()`` then ``_load_a_share_cache()``
+        used to nest the lock; this method makes that legal).
+        """
+        try:
+            self._known_a_shares = set(self._client.list_symbols())
+            self._known_etfs = set(self._client.list_etfs())
+        except Exception as exc:
+            logger.debug("tdx_chronos list_symbols/list_etfs failed: %s", exc)
+            self._known_a_shares = set()
+            self._known_etfs = set()
+
     def _load_a_share_cache(self) -> set[str]:
         with self._known_lock:
             if self._known_a_shares is None:
-                try:
-                    self._known_a_shares = set(self._client.list_symbols())
-                    self._known_etfs = set(self._client.list_etfs())
-                except Exception as exc:
-                    logger.debug("tdx_chronos list_symbols/list_etfs failed: %s", exc)
-                    self._known_a_shares = set()
-                    self._known_etfs = set()
+                self._populate_caches()
             return self._known_a_shares
 
     def _load_etf_cache(self) -> set[str]:
         with self._known_lock:
             if self._known_etfs is None:
-                self._load_a_share_cache()
+                self._populate_caches()
             return self._known_etfs or set()
 
     def _canonical(self, symbol: str) -> str:

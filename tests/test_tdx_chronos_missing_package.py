@@ -50,3 +50,41 @@ class MissingPackageTests(unittest.TestCase):
         ):
             # Just importing is enough — the assertion is that nothing throws.
             self.assertTrue(callable(interface.route_to_vendor))
+
+    def test_load_etf_then_a_share_does_not_deadlock_in_single_thread(self):
+        """Regression: calling _load_etf_cache before _load_a_share_cache in the
+        same thread must not deadlock on the non-reentrant cache lock.
+
+        The original implementation nested _load_a_share_cache inside
+        _load_etf_cache while holding the same non-reentrant ``threading.Lock``,
+        which deadlocked a single-thread caller that invoked both methods in
+        sequence. The work is wrapped in a worker thread + ``future.result(timeout=...)``
+        so the test fails fast with a clear message rather than hanging the suite.
+        ``executor.shutdown(wait=False)`` keeps the test runner itself from
+        blocking on the deadlocked worker thread on its way out.
+        """
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+
+        client = mock.Mock()
+        client.list_symbols.return_value = ["600000.SH", "600001.SH"]
+        client.list_etfs.return_value = ["510300.SH", "510500.SH"]
+
+        adapter = tc_mod._TdxAdapter(client=client, data_dir="/tmp/fake-tdx-chronos")
+
+        def both():
+            return adapter._load_etf_cache(), adapter._load_a_share_cache()
+
+        executor = ThreadPoolExecutor(max_workers=1)
+        try:
+            future = executor.submit(both)
+            try:
+                etfs, a_shares = future.result(timeout=5)
+            except FuturesTimeout:
+                self.fail(
+                    "Deadlock: _load_etf_cache() followed by _load_a_share_cache() "
+                    "in the same thread hung — the cache lock is non-reentrant."
+                )
+            self.assertEqual(etfs, {"510300.SH", "510500.SH"})
+            self.assertEqual(a_shares, {"600000.SH", "600001.SH"})
+        finally:
+            executor.shutdown(wait=False)
