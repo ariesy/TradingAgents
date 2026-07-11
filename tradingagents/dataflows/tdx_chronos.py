@@ -258,17 +258,37 @@ class _TdxAdapter:
             + description
         )
 
+    def _finance_csv(self, canonical: str, header_label: str, ratio_only: bool) -> str:
+        etfs = self._load_etf_cache()
+        if canonical in etfs:
+            return ETF_OUT_OF_SCOPE_MARKER
+        try:
+            df = self._client.finance(canonical, ratio_only=ratio_only)
+        except Exception as exc:
+            raise NoMarketDataError(canonical, canonical, f"tdx_chronos.finance failed: {exc}") from exc
+        if df is None or df.empty:
+            raise NoMarketDataError(canonical, canonical, "no financial rows in tdx_chronos")
+        csv = df.to_csv(index=False)
+        header = f"# {header_label} for {canonical}\n"
+        header += f"# Quarters: {len(df)}\n"
+        header += f"# Data retrieved on: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
+        return header + csv
+
     def get_fundamentals(self, canonical: str) -> str:
-        raise NotImplementedError  # Task 5
+        self._canonical(canonical)
+        return self._finance_csv(canonical, "Fundamentals", ratio_only=True)
 
     def get_balance_sheet(self, canonical: str) -> str:
-        raise NotImplementedError  # Task 5
+        self._canonical(canonical)
+        return self._finance_csv(canonical, "Balance sheet", ratio_only=False)
 
     def get_cashflow(self, canonical: str) -> str:
-        raise NotImplementedError  # Task 5
+        self._canonical(canonical)
+        return self._finance_csv(canonical, "Cash flow", ratio_only=False)
 
     def get_income_statement(self, canonical: str) -> str:
-        raise NotImplementedError  # Task 5
+        self._canonical(canonical)
+        return self._finance_csv(canonical, "Income statement", ratio_only=False)
 
     def get_insider_transactions(self, canonical: str) -> str:
         raise NotImplementedError  # Task 6

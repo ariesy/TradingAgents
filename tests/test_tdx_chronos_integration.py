@@ -9,7 +9,7 @@ import pytest
 
 from tradingagents.dataflows import tdx_chronos as tc
 from tradingagents.dataflows.tdx_chronos import (
-    ETF_OUT_OF_SCOPE_MARKER,  # noqa: F401  scaffold for Tasks 4-6
+    ETF_OUT_OF_SCOPE_MARKER,
     _TdxAdapter,
     get_tdx_adapter,  # noqa: F401  scaffold for Tasks 4-6
 )
@@ -139,3 +139,58 @@ class TestGetIndicators(unittest.TestCase):
         from tradingagents.dataflows.errors import NoMarketDataError
         with self.assertRaises(NoMarketDataError):
             adapter.get_indicators("AAPL", "rsi", "2024-12-31", look_back_days=3)
+
+
+@pytest.mark.unit
+class TestGetFundamentals(unittest.TestCase):
+    def setUp(self):
+        tc._reset_state_for_tests()
+
+    def tearDown(self):
+        tc._restore_state_for_tests(tc._adapter_state_for_tests())
+
+    def test_etf_returns_out_of_scope_marker(self):
+        client = _fake_client(list_symbols=["sh510050"], list_etfs=["sh510050"])
+        adapter = _TdxAdapter(client=client, data_dir="/data")
+        out = adapter.get_fundamentals("sh510050")
+        self.assertEqual(out, ETF_OUT_OF_SCOPE_MARKER)
+        client.finance.assert_not_called()
+
+    def test_a_share_returns_finance_csv(self):
+        finance_df = pd.DataFrame(
+            {
+                "code": ["sh600000"] * 3,
+                "report_date": ["2024-03-31", "2024-06-30", "2024-09-30"],
+                "净资产收益率": [10.0, 11.0, 12.0],
+                "毛利率": [40.0, 41.0, 42.0],
+            }
+        )
+        client = _fake_client(list_symbols=["sh600000"], list_etfs=[])
+        client.finance.return_value = finance_df
+        adapter = _TdxAdapter(client=client, data_dir="/data")
+        out = adapter.get_fundamentals("sh600000")
+        self.assertTrue(out.startswith("# Fundamentals for sh600000"))
+        for col in ("净资产收益率", "毛利率"):
+            self.assertIn(col, out)
+
+    def test_empty_finance_raises(self):
+        client = _fake_client(list_symbols=["sh600000"], list_etfs=[])
+        client.finance.return_value = pd.DataFrame({})
+        adapter = _TdxAdapter(client=client, data_dir="/data")
+        from tradingagents.dataflows.errors import NoMarketDataError
+        with self.assertRaises(NoMarketDataError):
+            adapter.get_fundamentals("sh600000")
+
+    def test_other_statements_reuse_fundamentals(self):
+        client = _fake_client(list_symbols=["sh600000"], list_etfs=[])
+        client.finance.return_value = pd.DataFrame(
+            {"code": ["sh600000"], "report_date": ["2024-09-30"], "净利润": [1.0]}
+        )
+        adapter = _TdxAdapter(client=client, data_dir="/data")
+        bs = adapter.get_balance_sheet("sh600000")
+        cf = adapter.get_cashflow("sh600000")
+        is_ = adapter.get_income_statement("sh600000")
+        self.assertTrue(bs.startswith("# Balance sheet for sh600000"))
+        self.assertTrue(cf.startswith("# Cash flow for sh600000"))
+        self.assertTrue(is_.startswith("# Income statement for sh600000"))
+        self.assertGreaterEqual(client.finance.call_count, 3)
