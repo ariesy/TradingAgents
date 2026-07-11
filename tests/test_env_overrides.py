@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import copy
 import importlib
+import unittest
+from unittest import mock
 
 import pytest
 
+import tradingagents.dataflows.config as config_module
+import tradingagents.default_config as default_config
 import tradingagents.default_config as default_config_module
 
 
@@ -127,3 +132,34 @@ def test_unknown_env_var_is_ignored(monkeypatch):
         TRADINGAGENTS_NONEXISTENT_KEY="oops",
     )
     assert "nonexistent_key" not in dc.DEFAULT_CONFIG
+
+
+@pytest.mark.unit
+class TdxChronosEnvOverrideTests(unittest.TestCase):
+    def setUp(self):
+        config_module._config = copy.deepcopy(default_config.DEFAULT_CONFIG)
+
+    def tearDown(self):
+        config_module._config = copy.deepcopy(default_config.DEFAULT_CONFIG)
+
+    def test_data_dir_override(self):
+        with mock.patch.dict(
+            "os.environ", {"TRADINGAGENTS_TDX_CHRONOS_DATA_DIR": "/opt/tdx"}, clear=True
+        ):
+            importlib.reload(default_config)
+            cfg = default_config.DEFAULT_CONFIG
+            self.assertEqual(cfg["tdx_chronos_data_dir"], "/opt/tdx")
+
+    def test_auto_route_off_override(self):
+        with mock.patch.dict(
+            "os.environ", {"TRADINGAGENTS_TDX_CHRONOS_AUTO_ROUTE": "0"}, clear=True
+        ):
+            importlib.reload(default_config)
+            cfg = default_config.DEFAULT_CONFIG
+            self.assertEqual(cfg["tdx_chronos_auto_route"], False)
+
+    def test_invalid_auto_route_raises(self):
+        with mock.patch.dict(
+            "os.environ", {"TRADINGAGENTS_TDX_CHRONOS_AUTO_ROUTE": "maybe"}, clear=True
+        ), self.assertRaises(ValueError):
+            importlib.reload(default_config)

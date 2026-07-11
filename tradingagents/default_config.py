@@ -25,6 +25,8 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_GOOGLE_THINKING_LEVEL":   "google_thinking_level",
     "TRADINGAGENTS_OPENAI_REASONING_EFFORT": "openai_reasoning_effort",
     "TRADINGAGENTS_ANTHROPIC_EFFORT":        "anthropic_effort",
+    "TRADINGAGENTS_TDX_CHRONOS_DATA_DIR":    "tdx_chronos_data_dir",
+    "TRADINGAGENTS_TDX_CHRONOS_AUTO_ROUTE":  "tdx_chronos_auto_route",
 }
 
 
@@ -72,6 +74,13 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "project_dir": os.path.abspath(os.path.join(os.path.dirname(__file__), ".")),
     "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR", os.path.join(_TRADINGAGENTS_HOME, "logs")),
     "data_cache_dir": os.getenv("TRADINGAGENTS_CACHE_DIR", os.path.join(_TRADINGAGENTS_HOME, "cache")),
+    # tdx-chronos (A-share offline data warehouse). Optional dependency;
+    # the adapter becomes a no-op when the package or this directory is
+    # missing. The actual data-dir resolution (env -> config -> fallback)
+    # happens lazily inside ``_resolve_data_dir``; the string here is just
+    # a documented default for users reading the config.
+    "tdx_chronos_data_dir": "/app/tdx-chronos/data",
+    "tdx_chronos_auto_route": True,
     "memory_log_path": os.getenv("TRADINGAGENTS_MEMORY_LOG_PATH", os.path.join(_TRADINGAGENTS_HOME, "memory", "trading_memory.md")),
     # Optional cap on the number of resolved memory log entries. When set,
     # the oldest resolved entries are pruned once this limit is exceeded.

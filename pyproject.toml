@@ -44,6 +44,9 @@ dev = [
 bedrock = [
     "langchain-aws>=1.5.0",
 ]
+# A-share & ETF offline data warehouse from `/app/tdx-chronos`. The adapter
+# silently no-ops when this isn't installed, so this remains opt-in.
+tdx_chronos = ["tdx-chronos @ file:///app/tdx-chronos"]
 
 [project.scripts]
 tradingagents = "cli.main:app"
