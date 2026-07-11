@@ -13,6 +13,7 @@ sites do not need to branch on vendor.
 from __future__ import annotations
 
 import atexit
+import datetime
 import logging
 import os
 import threading
@@ -179,7 +180,36 @@ class _TdxAdapter:
     # --- category methods (filled in over Tasks 3-6) --------------------------
 
     def get_stock_data(self, canonical: str, start_date: str, end_date: str) -> str:
-        raise NotImplementedError  # Task 3
+        """OHLCV via ``TdxChronos.kline``; returns the same CSV-string header shape
+        :func:`tradingagents.dataflows.y_finance.get_YFin_data_online` produces.
+        """
+        user_input = canonical
+        canon = self._canonical(user_input)
+        try:
+            df = self._client.kline(canon, start_date, end_date)
+        except Exception as exc:
+            raise NoMarketDataError(canon, canon, f"tdx_chronos.kline failed: {exc}") from exc
+
+        if df is None or df.empty:
+            raise NoMarketDataError(canon, canon, f"no rows between {start_date} and {end_date}")
+
+        out = df.rename(
+            columns={
+                "date": "Date", "open": "Open", "high": "High",
+                "low": "Low", "close": "Close",
+                "amount": "Amount", "vol": "Volume",
+            }
+        )
+        if "Volume" not in out.columns and "vol" in df.columns:
+            out["Volume"] = df["vol"]
+        cols = [c for c in ("Date", "Open", "High", "Low", "Close", "Volume", "Amount") if c in out.columns]
+        csv = out[cols].to_csv(index=False)
+
+        label = canon if canon == user_input else f"{canon} (from {user_input})"
+        header = f"# Stock data for {label} from {start_date} to {end_date}\n"
+        header += f"# Total records: {len(out)}\n"
+        header += f"# Data retrieved on: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
+        return header + csv
 
     def get_indicators(self, canonical: str, indicator: str, curr_date: str, look_back_days: int) -> str:
         raise NotImplementedError  # Task 4
