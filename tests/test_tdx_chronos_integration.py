@@ -82,3 +82,60 @@ class TestGetStockData(unittest.TestCase):
         from tradingagents.dataflows.errors import NoMarketDataError
         with self.assertRaises(NoMarketDataError):
             adapter.get_stock_data("AAPL", "2024-12-30", "2024-12-31")
+
+
+_INDICATOR_DESCRIPTIONS = {
+    "rsi": "RSI: Measures momentum to flag overbought/oversold conditions.",
+    "macd": "MACD: Computes momentum via differences of EMAs.",
+    "close_50_sma": "50 SMA: A medium-term trend indicator.",
+}
+
+
+@pytest.mark.unit
+class TestGetIndicators(unittest.TestCase):
+    def setUp(self):
+        tc._reset_state_for_tests()
+
+    def tearDown(self):
+        tc._restore_state_for_tests(tc._adapter_state_for_tests())
+
+    def test_window_format_matches_yfinance(self):
+        kline = pd.DataFrame(
+            {
+                "date": ["2024-12-25", "2024-12-26", "2024-12-27", "2024-12-30", "2024-12-31"],
+                "open": [10, 10, 10, 10, 10],
+                "high": [11, 11, 11, 11, 11],
+                "low": [9, 9, 9, 9, 9],
+                "close": [10.0, 10.2, 10.4, 10.3, 10.5],
+                "amount": [1] * 5,
+                "vol": [1] * 5,
+            }
+        )
+        client = _fake_client(kline_df=kline)
+        with (
+            mock.patch("tradingagents.dataflows.stockstats.wrap", side_effect=lambda df: df),
+            mock.patch(
+                "tradingagents.dataflows.tdx_chronos._indicator_value_for_date",
+                side_effect=lambda df, ind, d: 50.0 if d == "2024-12-31" else None,
+            ),
+        ):
+            adapter = _TdxAdapter(client=client, data_dir="/data")
+            out = adapter.get_indicators("sh600000", "rsi", "2024-12-31", look_back_days=3)
+
+        self.assertTrue(out.startswith("## rsi values from"))
+        for date_str in ("2024-12-29", "2024-12-30", "2024-12-31"):
+            self.assertIn(date_str, out)
+        self.assertIn("RSI:", out)
+
+    def test_unsupported_indicator_raises_value_error(self):
+        client = _fake_client()
+        adapter = _TdxAdapter(client=client, data_dir="/data")
+        with self.assertRaises(ValueError):
+            adapter.get_indicators("sh600000", "totally_made_up", "2024-12-31", look_back_days=3)
+
+    def test_non_a_share_canonicalization_raises(self):
+        client = _fake_client()
+        adapter = _TdxAdapter(client=client, data_dir="/data")
+        from tradingagents.dataflows.errors import NoMarketDataError
+        with self.assertRaises(NoMarketDataError):
+            adapter.get_indicators("AAPL", "rsi", "2024-12-31", look_back_days=3)

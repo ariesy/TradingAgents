@@ -19,6 +19,8 @@ import os
 import threading
 from typing import Any
 
+import pandas as pd
+
 from .errors import NoMarketDataError
 from .symbol_utils import is_a_share, normalize_a_share
 
@@ -212,7 +214,49 @@ class _TdxAdapter:
         return header + csv
 
     def get_indicators(self, canonical: str, indicator: str, curr_date: str, look_back_days: int) -> str:
-        raise NotImplementedError  # Task 4
+        """Compute a single indicator over a ``look_back_days`` window ending at ``curr_date``.
+
+        Loads kline from tdx-chronos, runs stockstats per date, returns the same
+        multi-line string shape as :func:`get_stock_stats_indicators_window`.
+        """
+        self._canonical(canonical)
+        if indicator not in _INDICATOR_DESCRIPTIONS:
+            raise ValueError(
+                f"Indicator {indicator!r} not supported. Choose from: {list(_INDICATOR_DESCRIPTIONS)}"
+            )
+
+        end_dt = datetime.datetime.strptime(curr_date, "%Y-%m-%d")
+        start_dt = end_dt - datetime.timedelta(days=look_back_days)
+        start_date = start_dt.strftime("%Y-%m-%d")
+        end_date_inclusive = (end_dt + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+
+        try:
+            df = self._client.kline(canonical, start_date, end_date_inclusive)
+        except Exception as exc:
+            raise NoMarketDataError(canonical, canonical, f"tdx_chronos.kline failed: {exc}") from exc
+
+        description = _INDICATOR_DESCRIPTIONS[indicator]
+        lines = []
+        cursor = end_dt
+        while cursor >= start_dt:
+            date_str = cursor.strftime("%Y-%m-%d")
+            try:
+                value = _indicator_value_for_date(df, indicator, date_str)
+            except Exception:
+                value = None
+            if value is None:
+                lines.append(f"{date_str}: N/A: Not a trading day (weekend or holiday)")
+            else:
+                lines.append(f"{date_str}: {value}")
+            cursor -= datetime.timedelta(days=1)
+
+        body = "\n".join(lines) + "\n"
+        return (
+            f"## {indicator} values from {start_dt.strftime('%Y-%m-%d')} to {curr_date}:\n\n"
+            + body
+            + "\n\n"
+            + description
+        )
 
     def get_fundamentals(self, canonical: str) -> str:
         raise NotImplementedError  # Task 5
@@ -260,6 +304,54 @@ class _TdxAdapter:
 _adapter_state_for_tests = _TdxAdapter._adapter_state_for_tests
 _reset_state_for_tests = _TdxAdapter._reset_state_for_tests
 _restore_state_for_tests = _TdxAdapter._restore_state_for_tests
+
+
+_INDICATOR_DESCRIPTIONS = {
+    # Moving Averages
+    "close_50_sma": "50 SMA: A medium-term trend indicator. Usage: Identify trend direction and serve as dynamic support/resistance. Tips: It lags price; combine with faster indicators for timely signals.",
+    "close_200_sma": "200 SMA: A long-term trend benchmark. Usage: Confirm overall market trend and identify golden/death cross setups. Tips: It reacts slowly; best for strategic trend confirmation rather than frequent trading entries.",
+    "close_10_ema": "10 EMA: A responsive short-term average. Usage: Capture quick shifts in momentum and potential entry points. Tips: Prone to noise in choppy markets; use alongside longer averages for filtering false signals.",
+    # MACD
+    "macd": "MACD: Computes momentum via differences of EMAs. Usage: Look for crossovers and divergence as signals of trend changes. Tips: Confirm with other indicators in low-volatility or sideways markets.",
+    "macds": "MACD Signal: An EMA smoothing of the MACD line. Usage: Use crossovers with the MACD line to trigger trades. Tips: Should be part of a broader strategy to avoid false positives.",
+    "macdh": "MACD Histogram: Shows the gap between the MACD line and its signal. Usage: Visualize momentum strength and spot divergence early. Tips: Can be volatile; complement with additional filters in fast-moving markets.",
+    # Momentum
+    "rsi": "RSI: Measures momentum to flag overbought/oversold conditions. Usage: Apply 70/30 thresholds and watch for divergence to signal reversals. Tips: In strong trends, RSI may remain extreme; always cross-check with trend analysis.",
+    # Volatility
+    "boll": "Bollinger Middle: A 20 SMA serving as the basis for Bollinger Bands. Usage: Acts as a dynamic benchmark for price movement. Tips: Combine with the upper and lower bands to effectively spot breakouts or reversals.",
+    "boll_ub": "Bollinger Upper Band: Typically 2 standard deviations above the middle line. Usage: Signals potential overbought conditions and breakout zones. Tips: Confirm signals with other tools; prices may ride the band in strong trends.",
+    "boll_lb": "Bollinger Lower Band: Typically 2 standard deviations below the middle line. Usage: Indicates potential oversold conditions. Tips: Use additional analysis to avoid false reversal signals.",
+    "atr": "ATR: Averages true range to measure volatility. Usage: Set stop-loss levels and adjust position sizes based on current market volatility. Tips: It's a reactive measure, so use it as part of a broader risk management strategy.",
+    # Volume-based
+    "vwma": "VWMA: A moving average weighted by volume. Usage: Confirm trends by integrating price action with volume. Tips: Watch for skewed results from volume spikes; use in combination with other volume analyses.",
+    "mfi": "MFI: The Money Flow Index is a momentum indicator that uses both price and volume to measure buying and selling pressure. Usage: Identify overbought (>80) or oversold (<20) conditions and confirm the strength of trends or reversals. Tips: Use alongside RSI or MACD to confirm signals; divergence between price and MFI can indicate potential reversals.",
+}
+
+
+def _indicator_value_for_date(df: pd.DataFrame, indicator: str, target_date: str):
+    """Compute ``indicator`` on ``df`` via stockstats and look up ``target_date``.
+
+    Returns ``None`` when the date isn't in the frame (weekend/holiday).
+    """
+    from stockstats import wrap
+
+    work = df.rename(columns={"date": "Date", "open": "Open", "high": "High",
+                              "low": "Low", "close": "Close",
+                              "amount": "Amount", "vol": "Volume"})
+    if "Volume" not in work.columns and "vol" in df.columns:
+        work["Volume"] = df["vol"]
+    work["Date"] = pd.to_datetime(work["Date"])
+    work = work.sort_values("Date").reset_index(drop=True)
+    wrapped = wrap(work)
+    try:
+        _ = wrapped[indicator]
+    except KeyError:
+        return None
+    rows = wrapped[wrapped["Date"].dt.strftime("%Y-%m-%d") == target_date]
+    if rows.empty:
+        return None
+    val = rows[indicator].iloc[0]
+    return float(val) if pd.notna(val) else None
 
 
 def is_a_share_via_adapter(symbol: str) -> bool:
