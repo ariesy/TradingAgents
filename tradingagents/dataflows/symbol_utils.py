@@ -141,3 +141,73 @@ def normalize_symbol(raw: str) -> str:
 def is_yahoo_safe(symbol: str) -> bool:
     """True when ``symbol`` only contains characters Yahoo symbols use."""
     return bool(symbol) and _YAHOO_SAFE.fullmatch(symbol) is not None
+
+
+# A-share symbol normalization.
+#
+# Accept three input shapes and produce the TDX-native lowercase form
+# (``sh600000`` / ``sz000001`` / ``bj830799``) that ``TdxChronos`` expects:
+#
+#     user types   canonical        prefix rule (first digit)
+#     ----------   ---------------  -----------------------
+#     600000       sh600000          5/6/9 -> sh
+#     000001       sz000001          0/2/3 -> sz
+#     830799       bj830799          4/8 -> bj
+#     600000.SS    sh600000          Yahoo / TradingView suffixes
+#     sh600000     sh600000          TDX native (lowercased)
+#
+# Returns the empty string for non-A-share inputs — callers treat that as
+# "skip auto-route" and fall through to the existing vendor chain.
+
+_A_SHARE_BARE = re.compile(r"^(\d{6})$")
+_A_SHARE_TDX = re.compile(r"^(sh|sz|bj)(\d{6})$", re.IGNORECASE)
+_A_SHARE_YAHOO = re.compile(r"^(\d{6})\.(SS|SZ|BJ)$", re.IGNORECASE)
+
+_A_SHARE_DIGIT_TO_PREFIX = {
+    "5": "sh", "6": "sh", "9": "sh",
+    "0": "sz", "2": "sz", "3": "sz",
+    "4": "bj", "1": "sz", "8": "bj",
+}
+
+
+def normalize_a_share(symbol: str) -> str:
+    """Return TDX-native A-share form (``sh600000``) or ``''`` when input isn't A-share.
+
+    Pure regex/format normalization; does not look up ``TdxChronos.list_symbols()``.
+    Use :func:`is_a_share` for the cross-validated answer.
+    """
+    if not isinstance(symbol, str):
+        return ""
+    s = symbol.strip()
+    if not s:
+        return ""
+
+    m = _A_SHARE_TDX.match(s)
+    if m:
+        prefix, digits = m.group(1).lower(), m.group(2)
+        return f"{prefix}{digits}"
+
+    m = _A_SHARE_BARE.match(s)
+    if m:
+        prefix = _A_SHARE_DIGIT_TO_PREFIX.get(m.group(1)[0])
+        if prefix is None:
+            return ""
+        return f"{prefix}{m.group(1)}"
+
+    m = _A_SHARE_YAHOO.match(s)
+    if m:
+        digits, suffix = m.group(1), m.group(2).lower()
+        prefix = {"ss": "sh", "sz": "sz", "bj": "bj"}[suffix]
+        return f"{prefix}{digits}"
+
+    return ""
+
+
+def is_a_share(symbol: str) -> bool:
+    """True when :func:`normalize_a_share` returns a well-formed canonical form.
+
+    Validation against ``TdxChronos.list_symbols()`` is added in Task 2; this
+    task covers the format-only stage so a missing-package failure mode
+    cannot mask a typo in the regex.
+    """
+    return bool(normalize_a_share(symbol))
