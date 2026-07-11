@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Breaking changes within the 0.x line are called out explicitly.
 
+## Unreleased
+
+### Added
+- First-priority A-share & ETF routing via tdx-chronos (`tradingagents/dataflows/tdx_chronos.py`). Auto-detects `sh/sz/bj` symbols (`sh600000`, `600000.SS`, etc.) and dispatches OHLCV / indicators / fundamentals / shareholders / benchmark index klines. ETF/LOF/REIT/可转债 fundamentals return an explicit out-of-scope marker. Opt-in install: `pip install -e ".[tdx_chronos]"`.
+- New env vars: `TRADINGAGENTS_TDX_CHRONOS_DATA_DIR`, `TRADINGAGENTS_TDX_CHRONOS_AUTO_ROUTE`.
+
 ## [0.3.1] — 2026-07-05
 
 Correctness and stability patch: data look-ahead, graph-router crash-safety,
