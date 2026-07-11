@@ -414,3 +414,33 @@ def is_a_share_via_adapter(symbol: str) -> bool:
 
 # ``is_a_share`` keeps its pure-regex semantics for now; the warehouse-backed
 # check becomes the public name in Task 7.
+
+_LAZY_METHOD_TABLE = {
+    "get_stock_data": "get_stock_data",
+    "get_indicators": "get_indicators",
+    "get_fundamentals": "get_fundamentals",
+    "get_balance_sheet": "get_balance_sheet",
+    "get_cashflow": "get_cashflow",
+    "get_income_statement": "get_income_statement",
+    "get_insider_transactions": "get_insider_transactions",
+}
+
+
+def get_tdx_adapter_method(method: str):
+    """Return a closure ``f(symbol, *args, **kwargs)`` that calls
+    ``adapter.dispatch(method, symbol, *args, **kwargs)``.
+
+    Raises :class:`VendorNotConfiguredError` when the adapter is absent —
+    matches the existing ``VENDOR_METHODS`` contract.
+    """
+    from .errors import VendorNotConfiguredError
+
+    def _impl(symbol, *args, **kwargs):
+        adapter = get_tdx_adapter()
+        if adapter is None:
+            raise VendorNotConfiguredError(
+                "tdx_chronos not available; install with `pip install -e /app/tdx-chronos`"
+            )
+        return adapter.dispatch(method, symbol, *args, **kwargs)
+
+    return _impl

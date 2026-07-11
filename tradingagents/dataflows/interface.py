@@ -1,5 +1,7 @@
 import logging
+import os
 
+from . import tdx_chronos as _tdx
 from .alpha_vantage import (
     get_balance_sheet as get_alpha_vantage_balance_sheet,
     get_cashflow as get_alpha_vantage_cashflow,
@@ -82,6 +84,7 @@ VENDOR_LIST = [
     "fred",
     "polymarket",
     "alpha_vantage",
+    "tdx_chronos",
 ]
 
 # Optional enrichment categories. These add macro/event context to the news
@@ -97,28 +100,34 @@ VENDOR_METHODS = {
     "get_stock_data": {
         "alpha_vantage": get_alpha_vantage_stock,
         "yfinance": get_YFin_data_online,
+        "tdx_chronos": _tdx.get_tdx_adapter_method("get_stock_data"),
     },
     # technical_indicators
     "get_indicators": {
         "alpha_vantage": get_alpha_vantage_indicator,
         "yfinance": get_stock_stats_indicators_window,
+        "tdx_chronos": _tdx.get_tdx_adapter_method("get_indicators"),
     },
     # fundamental_data
     "get_fundamentals": {
         "alpha_vantage": get_alpha_vantage_fundamentals,
         "yfinance": get_yfinance_fundamentals,
+        "tdx_chronos": _tdx.get_tdx_adapter_method("get_fundamentals"),
     },
     "get_balance_sheet": {
         "alpha_vantage": get_alpha_vantage_balance_sheet,
         "yfinance": get_yfinance_balance_sheet,
+        "tdx_chronos": _tdx.get_tdx_adapter_method("get_balance_sheet"),
     },
     "get_cashflow": {
         "alpha_vantage": get_alpha_vantage_cashflow,
         "yfinance": get_yfinance_cashflow,
+        "tdx_chronos": _tdx.get_tdx_adapter_method("get_cashflow"),
     },
     "get_income_statement": {
         "alpha_vantage": get_alpha_vantage_income_statement,
         "yfinance": get_yfinance_income_statement,
+        "tdx_chronos": _tdx.get_tdx_adapter_method("get_income_statement"),
     },
     # news_data
     "get_news": {
@@ -132,6 +141,7 @@ VENDOR_METHODS = {
     "get_insider_transactions": {
         "alpha_vantage": get_alpha_vantage_insider_transactions,
         "yfinance": get_yfinance_insider_transactions,
+        "tdx_chronos": _tdx.get_tdx_adapter_method("get_insider_transactions"),
     },
     # macro_data
     "get_macro_indicators": {
@@ -167,6 +177,18 @@ def get_vendor(category: str, method: str = None) -> str:
 
 def route_to_vendor(method: str, *args, **kwargs):
     """Route method calls to appropriate vendor implementation with fallback support."""
+    symbol_arg = args[0] if args else kwargs.get("symbol")
+    if (
+        symbol_arg
+        and not os.getenv("TRADINGAGENTS_DISABLE_TDX_CHRONOS_AUTO_ROUTE")
+        and _tdx.is_a_share_via_adapter(symbol_arg)
+    ):
+        adapter = _tdx.get_tdx_adapter()
+        if adapter is not None:
+            try:
+                return adapter.dispatch(method, *args, **kwargs)
+            except NoMarketDataError:
+                raise
     category = get_category_for_method(method)
     vendor_config = get_vendor(category, method)
     primary_vendors = [v.strip() for v in vendor_config.split(',')]
