@@ -57,7 +57,7 @@ CLI flag surface is tiny: `tradingagents analyze [--checkpoint|--no-checkpoint] 
 - `TRADINGAGENTS_MAX_DEBATE_ROUNDS`, `TRADINGAGENTS_MAX_RISK_ROUNDS`
 - `TRADINGAGENTS_CHECKPOINT_ENABLED`
 - `TRADINGAGENTS_OUTPUT_LANGUAGE`
-- `TRADINGAGENTS_TDX_CHRONOS_DATA_DIR`, `TRADINGAGENTS_TDX_CHRONOS_AUTO_ROUTE` — A-share offline warehouse path and auto-route gate.
+- `TRADINGAGENTS_TDX_CHRONOS_DATA_DIR`, `TRADINGAGENTS_TDX_CHRONOS_AUTO_ROUTE`, `TRADINGAGENTS_DISABLE_TDX_CHRONOS_AUTO_ROUTE` — A-share offline warehouse path, auto-route config key, and runtime gate escape hatch (only the `DISABLE_*` var is read by the auto-route gate in `tradingagents/dataflows/interface.py:183`).
 - Provider-specific: `TRADINGAGENTS_OPENAI_REASONING_EFFORT`, `TRADINGAGENTS_GOOGLE_THINKING_LEVEL`, `TRADINGAGENTS_ANTHROPIC_EFFORT`
 
 API keys: `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `DASHSCOPE_API_KEY` / `DASHSCOPE_CN_API_KEY`, `ZHIPU_API_KEY` / `ZHIPU_CN_API_KEY`, `MINIMAX_API_KEY` / `MINIMAX_CN_API_KEY`, `OPENROUTER_API_KEY`, `ALPHA_VANTAGE_API_KEY`, `FRED_API_KEY`, `AWS_BEARER_TOKEN_BEDROCK` (or full AWS credential chain).
@@ -97,4 +97,4 @@ A `mock_llm_client` fixture is available for tests that need to bypass the provi
 - **Docker compose profiles**: `tradingagents` is the default; `tradingagents-ollama` is under the `ollama` profile and brings up a sidecar `ollama` container.
 - **Look-ahead**: the Alpha Vantage fundamentals payload is a JSON string; date filtering must parse before filtering (#1115).
 - **Crypto tickers** use Yahoo's `<BASE>-USD` form (e.g. `BTC-USD`); StockTwits wants the base symbol as `<BASE>.X`, so the social path remaps.
-- **First-priority A-share**: When tdx-chronos is installed, A-share symbols (e.g. `sh600000`, `600000.SS`) auto-route to its offline parquet store before the configured `data_vendors` chain runs. Disable via `TRADINGAGENTS_TDX_CHRONOS_AUTO_ROUTE=1`. ETF/LOF/REIT/可转债 fundamentals return an explicit "out of scope" marker rather than fabricating values.
+- **First-priority A-share**: When tdx-chronos is installed, A-share symbols (e.g. `sh600000`, `600000.SS`) auto-route to its offline parquet store before the configured `data_vendors` chain runs. Disable via `TRADINGAGENTS_DISABLE_TDX_CHRONOS_AUTO_ROUTE=1`. ETF/LOF/REIT/可转债 fundamentals return an explicit "out of scope" marker rather than fabricating values.

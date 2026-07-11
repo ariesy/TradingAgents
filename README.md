@@ -176,7 +176,7 @@ For first-priority offline A-share & ETF data, install the companion warehouse:
 pip install -e /app/tdx-chronos
 ```
 
-Once installed, A-share tickers (`sh600000`, `600000.SS`, `000001.SZ`, `510050` for ETFs) automatically route to tdx-chronos. Override the data directory with `TRADINGAGENTS_TDX_CHRONOS_DATA_DIR` or `TDC_DATA_DIR`. Disable the auto-route with `TRADINGAGENTS_TDX_CHRONOS_AUTO_ROUTE=1` (falls back to the configured `data_vendors` chain).
+Once installed, A-share tickers (`sh600000`, `600000.SS`, `000001.SZ`, `510050` for ETFs) automatically route to tdx-chronos. Override the data directory with `TRADINGAGENTS_TDX_CHRONOS_DATA_DIR` or `TDC_DATA_DIR`. Disable the auto-route with `TRADINGAGENTS_DISABLE_TDX_CHRONOS_AUTO_ROUTE=1` (falls back to the configured `data_vendors` chain).
 
 ### CLI Usage
 
