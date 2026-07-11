@@ -194,3 +194,67 @@ class TestGetFundamentals(unittest.TestCase):
         self.assertTrue(cf.startswith("# Cash flow for sh600000"))
         self.assertTrue(is_.startswith("# Income statement for sh600000"))
         self.assertGreaterEqual(client.finance.call_count, 3)
+
+
+@pytest.mark.unit
+class TestGetInsiderTransactions(unittest.TestCase):
+    def setUp(self):
+        tc._reset_state_for_tests()
+
+    def tearDown(self):
+        tc._restore_state_for_tests(tc._adapter_state_for_tests())
+
+    def test_returns_shareholder_csv(self):
+        holder_df = pd.DataFrame(
+            {
+                "code": ["sh600000"] * 2,
+                "name": ["Acme", "Beta"],
+                "shares": [1000, 2000],
+            }
+        )
+        client = _fake_client()
+        client.shareholders.return_value = holder_df
+        adapter = _TdxAdapter(client=client, data_dir="/data")
+        out = adapter.get_insider_transactions("sh600000")
+        self.assertTrue(out.startswith("# Insider / shareholder records for sh600000"))
+        self.assertIn("Acme", out)
+        self.assertIn("Beta", out)
+
+    def test_empty_shareholder_raises(self):
+        client = _fake_client()
+        client.shareholders.return_value = pd.DataFrame({})
+        adapter = _TdxAdapter(client=client, data_dir="/data")
+        from tradingagents.dataflows.errors import NoMarketDataError
+        with self.assertRaises(NoMarketDataError):
+            adapter.get_insider_transactions("sh600000")
+
+
+@pytest.mark.unit
+class TestGetIndexKlines(unittest.TestCase):
+    def setUp(self):
+        tc._reset_state_for_tests()
+
+    def tearDown(self):
+        tc._restore_state_for_tests(tc._adapter_state_for_tests())
+
+    def test_returns_index_csv(self):
+        idx_df = pd.DataFrame(
+            {"date": ["2024-12-30", "2024-12-31"], "open": [3300, 3310],
+             "high": [3320, 3325], "low": [3290, 3305],
+             "close": [3310, 3320], "amount": [1e10, 1.1e10]}
+        )
+        client = _fake_client()
+        client.index_klines.return_value = idx_df
+        adapter = _TdxAdapter(client=client, data_dir="/data")
+        out = adapter.get_index_klines("sh000001", "2024-12-30", "2024-12-31")
+        self.assertTrue(out.startswith("# Index klines for sh000001"))
+        for col in ("date", "open", "close"):
+            self.assertIn(col, out)
+
+    def test_empty_index_klines_raises(self):
+        client = _fake_client()
+        client.index_klines.return_value = pd.DataFrame({})
+        adapter = _TdxAdapter(client=client, data_dir="/data")
+        from tradingagents.dataflows.errors import NoMarketDataError
+        with self.assertRaises(NoMarketDataError):
+            adapter.get_index_klines("sh000001", "2024-12-30", "2024-12-31")

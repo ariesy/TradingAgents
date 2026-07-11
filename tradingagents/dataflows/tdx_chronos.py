@@ -291,10 +291,35 @@ class _TdxAdapter:
         return self._finance_csv(canonical, "Income statement", ratio_only=False)
 
     def get_insider_transactions(self, canonical: str) -> str:
-        raise NotImplementedError  # Task 6
+        """Return shareholder / capital-record events for ``canonical``.
+
+        Delegates to ``TdxChronos.shareholders`` (which covers A-share + ETF +
+        convertible bonds per AGENTS.md).
+        """
+        self._canonical(canonical)
+        try:
+            df = self._client.shareholders(canonical)
+        except Exception as exc:
+            raise NoMarketDataError(canonical, canonical, f"tdx_chronos.shareholders failed: {exc}") from exc
+        if df is None or df.empty:
+            raise NoMarketDataError(canonical, canonical, "no shareholder rows")
+        csv = df.to_csv(index=False)
+        header = f"# Insider / shareholder records for {canonical}\n"
+        header += f"# Rows: {len(df)}\n\n"
+        return header + csv
 
     def get_index_klines(self, index_code: str, start_date: str, end_date: str) -> str:
-        raise NotImplementedError  # Task 6
+        """Benchmark index klines for the reflection layer."""
+        try:
+            df = self._client.index_klines(index_code, start_date, end_date)
+        except Exception as exc:
+            raise NoMarketDataError(index_code, index_code, f"tdx_chronos.index_klines failed: {exc}") from exc
+        if df is None or df.empty:
+            raise NoMarketDataError(index_code, index_code, f"no rows between {start_date} and {end_date}")
+        csv = df.to_csv(index=False)
+        header = f"# Index klines for {index_code} from {start_date} to {end_date}\n"
+        header += f"# Rows: {len(df)}\n\n"
+        return header + csv
 
     # --- test helpers ---------------------------------------------------------
 
