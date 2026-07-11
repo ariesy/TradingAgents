@@ -21,7 +21,8 @@ from typing import Any
 
 import pandas as pd
 
-from .errors import NoMarketDataError
+from .config import get_config
+from .errors import NoMarketDataError, VendorNotConfiguredError
 from .symbol_utils import is_a_share, normalize_a_share
 
 logger = logging.getLogger(__name__)
@@ -51,8 +52,6 @@ def _import_tdx_chronos() -> tuple[Any, Any]:
 
 def _resolve_data_dir() -> str | None:
     """Precedence: TRADINGAGENTS_TDX_CHRONOS_DATA_DIR -> config -> TDC_DATA_DIR -> /app/tdx-chronos/data."""
-    from .config import get_config
-
     cfg_path = get_config().get("tdx_chronos_data_dir")
     candidates = [
         os.environ.get("TRADINGAGENTS_TDX_CHRONOS_DATA_DIR"),
@@ -153,7 +152,7 @@ class _TdxAdapter:
         with self._known_lock:
             if self._known_etfs is None:
                 self._populate_caches()
-            return self._known_etfs or set()
+            return self._known_etfs
 
     def _canonical(self, symbol: str) -> str:
         canon = normalize_a_share(symbol)
@@ -181,11 +180,11 @@ class _TdxAdapter:
 
     # --- category methods (filled in over Tasks 3-6) --------------------------
 
-    def get_stock_data(self, canonical: str, start_date: str, end_date: str) -> str:
+    def get_stock_data(self, symbol: str, start_date: str, end_date: str) -> str:
         """OHLCV via ``TdxChronos.kline``; returns the same CSV-string header shape
         :func:`tradingagents.dataflows.y_finance.get_YFin_data_online` produces.
         """
-        user_input = canonical
+        user_input = symbol
         canon = self._canonical(user_input)
         try:
             df = self._client.kline(canon, start_date, end_date)
@@ -415,16 +414,6 @@ def is_a_share_via_adapter(symbol: str) -> bool:
 # ``is_a_share`` keeps its pure-regex semantics for now; the warehouse-backed
 # check becomes the public name in Task 7.
 
-_LAZY_METHOD_TABLE = {
-    "get_stock_data": "get_stock_data",
-    "get_indicators": "get_indicators",
-    "get_fundamentals": "get_fundamentals",
-    "get_balance_sheet": "get_balance_sheet",
-    "get_cashflow": "get_cashflow",
-    "get_income_statement": "get_income_statement",
-    "get_insider_transactions": "get_insider_transactions",
-}
-
 
 def get_tdx_adapter_method(method: str):
     """Return a closure ``f(symbol, *args, **kwargs)`` that calls
@@ -433,8 +422,6 @@ def get_tdx_adapter_method(method: str):
     Raises :class:`VendorNotConfiguredError` when the adapter is absent —
     matches the existing ``VENDOR_METHODS`` contract.
     """
-    from .errors import VendorNotConfiguredError
-
     def _impl(symbol, *args, **kwargs):
         adapter = get_tdx_adapter()
         if adapter is None:

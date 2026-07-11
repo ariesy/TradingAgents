@@ -175,6 +175,24 @@ def get_vendor(category: str, method: str = None) -> str:
     # Fall back to category-level configuration
     return config.get("data_vendors", {}).get(category, "default")
 
+def _no_data_sentinel(err: NoMarketDataError) -> str:
+    """Format a :class:`NoMarketDataError` as the NO_DATA_AVAILABLE sentinel string.
+
+    Shared by the auto-route gate and the chain loop so a "no data" verdict
+    reads identically regardless of which path produced it (#review).
+    """
+    sym = err.symbol
+    canonical = err.canonical
+    resolved = "" if canonical == sym else f" (resolved to '{canonical}')"
+    reason = f" ({err.detail})" if err.detail else ""
+    return (
+        f"NO_DATA_AVAILABLE: No usable market data for '{sym}'{resolved} from "
+        f"any configured vendor{reason}. The symbol may be invalid, delisted, "
+        f"not covered, or the vendor returned stale data. Do not estimate or "
+        f"fabricate values — report that data is unavailable for this symbol."
+    )
+
+
 def route_to_vendor(method: str, *args, **kwargs):
     """Route method calls to appropriate vendor implementation with fallback support."""
     symbol_arg = args[0] if args else kwargs.get("symbol")
@@ -187,8 +205,8 @@ def route_to_vendor(method: str, *args, **kwargs):
         if adapter is not None:
             try:
                 return adapter.dispatch(method, *args, **kwargs)
-            except NoMarketDataError:
-                raise
+            except NoMarketDataError as e:
+                return _no_data_sentinel(e)
     category = get_category_for_method(method)
     vendor_config = get_vendor(category, method)
     primary_vendors = [v.strip() for v in vendor_config.split(',')]
@@ -254,19 +272,7 @@ def route_to_vendor(method: str, *args, **kwargs):
                 "Returning NO_DATA for %s, but a vendor errored earlier: %s",
                 method, first_error,
             )
-        sym = last_no_data.symbol
-        canonical = last_no_data.canonical
-        resolved = "" if canonical == sym else f" (resolved to '{canonical}')"
-        # Surface the typed error's detail (e.g. "latest row is 2025-06-11 ...
-        # stale") so the agent sees the specific reason — invalid symbol, no
-        # coverage, or stale data — not just a generic "unavailable".
-        reason = f" ({last_no_data.detail})" if last_no_data.detail else ""
-        return (
-            f"NO_DATA_AVAILABLE: No usable market data for '{sym}'{resolved} from "
-            f"any configured vendor{reason}. The symbol may be invalid, delisted, "
-            f"not covered, or the vendor returned stale data. Do not estimate or "
-            f"fabricate values — report that data is unavailable for this symbol."
-        )
+        return _no_data_sentinel(last_no_data)
 
     # No vendor returned data and none reported clean "no data" — surface the
     # first real error (e.g. the primary vendor's network failure). Optional

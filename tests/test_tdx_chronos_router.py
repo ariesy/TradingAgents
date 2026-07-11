@@ -87,6 +87,22 @@ class AutoRouteGateTests(unittest.TestCase):
             out = interface.route_to_vendor("get_stock_data", "sh600000", "2024-12-30", "2024-12-31")
         self.assertIn("NO_DATA_AVAILABLE", out)
 
+    def test_no_market_error_in_auto_route_returns_no_data_sentinel(self):
+        """When the adapter raises NoMarketDataError, the auto-route gate converts
+        it to the same NO_DATA_AVAILABLE sentinel the chain loop produces."""
+        adapter = mock.Mock()
+        adapter.dispatch.side_effect = NoMarketDataError("sh600000", "sh600000", "no rows")
+        with (
+            mock.patch.object(tc, "get_tdx_adapter", return_value=adapter),
+            mock.patch.object(tc, "is_a_share_via_adapter", return_value=True),
+        ):
+            out = interface.route_to_vendor(
+                "get_stock_data", "sh600000", "2024-12-30", "2024-12-31"
+            )
+        self.assertIn("NO_DATA_AVAILABLE", out)
+        self.assertIn("sh600000", out)
+        self.assertIn("no rows", out)
+
 
 @pytest.mark.unit
 class ExplicitVendorTests(unittest.TestCase):

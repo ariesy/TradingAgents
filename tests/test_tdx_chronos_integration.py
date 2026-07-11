@@ -1,6 +1,5 @@
 """Adapter unit tests with a mocked TdxChronos facade."""
 
-import datetime  # noqa: F401  scaffold for Tasks 4-6
 import unittest
 from unittest import mock
 
@@ -11,7 +10,6 @@ from tradingagents.dataflows import tdx_chronos as tc
 from tradingagents.dataflows.tdx_chronos import (
     ETF_OUT_OF_SCOPE_MARKER,
     _TdxAdapter,
-    get_tdx_adapter,  # noqa: F401  scaffold for Tasks 4-6
 )
 
 
