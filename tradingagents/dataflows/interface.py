@@ -193,11 +193,25 @@ def _no_data_sentinel(err: NoMarketDataError) -> str:
     )
 
 
+# Methods that tdx_chronos supports natively; everything else (e.g.
+# get_news, get_global_news) must go through the normal vendor chain.
+_TDX_SUPPORTED_METHODS = frozenset({
+    "get_stock_data",
+    "get_indicators",
+    "get_fundamentals",
+    "get_balance_sheet",
+    "get_cashflow",
+    "get_income_statement",
+    "get_insider_transactions",
+})
+
+
 def route_to_vendor(method: str, *args, **kwargs):
     """Route method calls to appropriate vendor implementation with fallback support."""
     symbol_arg = args[0] if args else kwargs.get("symbol")
     if (
-        symbol_arg
+        method in _TDX_SUPPORTED_METHODS
+        and symbol_arg
         and not os.getenv("TRADINGAGENTS_DISABLE_TDX_CHRONOS_AUTO_ROUTE")
         and _tdx.is_a_share_via_adapter(symbol_arg)
     ):
