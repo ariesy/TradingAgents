@@ -27,7 +27,6 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_OPENAI_REASONING_EFFORT": "openai_reasoning_effort",
     "TRADINGAGENTS_ANTHROPIC_EFFORT":        "anthropic_effort",
     "TRADINGAGENTS_TDX_CHRONOS_DATA_DIR":    "tdx_chronos_data_dir",
-    "TRADINGAGENTS_TDX_CHRONOS_AUTO_ROUTE":  "tdx_chronos_auto_route",
 }
 
 
@@ -81,7 +80,6 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # happens lazily inside ``_resolve_data_dir``; the string here is just
     # a documented default for users reading the config.
     "tdx_chronos_data_dir": "/app/tdx-chronos/data",
-    "tdx_chronos_auto_route": True,
     "memory_log_path": os.getenv("TRADINGAGENTS_MEMORY_LOG_PATH", os.path.join(_TRADINGAGENTS_HOME, "memory", "trading_memory.md")),
     # Optional cap on the number of resolved memory log entries. When set,
     # the oldest resolved entries are pruned once this limit is exceeded.

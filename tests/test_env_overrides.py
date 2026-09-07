@@ -149,16 +149,13 @@ class TdxChronosEnvOverrideTests(unittest.TestCase):
             cfg = default_config_module.DEFAULT_CONFIG
             self.assertEqual(cfg["tdx_chronos_data_dir"], "/opt/tdx")
 
-    def test_auto_route_off_override(self):
+    def test_auto_route_key_removed(self):
+        # The auto-route key was a dead switch — no code reads it. Setting it
+        # must not register a config entry, and an invalid value must not raise
+        # (the var is just ignored).
         with mock.patch.dict(
-            "os.environ", {"TRADINGAGENTS_TDX_CHRONOS_AUTO_ROUTE": "0"}, clear=True
+            "os.environ", {"TRADINGAGENTS_TDX_CHRONOS_AUTO_ROUTE": "maybe"}, clear=True
         ):
             importlib.reload(default_config_module)
             cfg = default_config_module.DEFAULT_CONFIG
-            self.assertEqual(cfg["tdx_chronos_auto_route"], False)
-
-    def test_invalid_auto_route_raises(self):
-        with mock.patch.dict(
-            "os.environ", {"TRADINGAGENTS_TDX_CHRONOS_AUTO_ROUTE": "maybe"}, clear=True
-        ), self.assertRaises(ValueError):
-            importlib.reload(default_config_module)
+            self.assertNotIn("tdx_chronos_auto_route", cfg)

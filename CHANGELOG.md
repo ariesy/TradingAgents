@@ -10,7 +10,11 @@ Breaking changes within the 0.x line are called out explicitly.
 
 ### Added
 - First-priority A-share & ETF routing via tdx-chronos (`tradingagents/dataflows/tdx_chronos.py`). Auto-detects `sh/sz/bj` symbols (`sh600000`, `600000.SS`, etc.) and dispatches OHLCV / indicators / fundamentals / shareholders / benchmark index klines. ETF/LOF/REIT/可转债 fundamentals return an explicit out-of-scope marker. Opt-in install: `pip install -e ".[tdx_chronos]"`.
-- New env vars: `TRADINGAGENTS_TDX_CHRONOS_DATA_DIR`, `TRADINGAGENTS_TDX_CHRONOS_AUTO_ROUTE`.
+- New env var: `TRADINGAGENTS_TDX_CHRONOS_DATA_DIR`. When tdx-chronos is installed, A-share symbols are tried first; if TDX has no data, the router falls through to the configured `data_vendors` chain (TDX is a prioritized source, not a hard gate).
+
+### Changed
+- `TRADINGAGENTS_TDX_CHRONOS_AUTO_ROUTE` removed — the key was a dead switch (no code read it). The runtime gate is the `TRADINGAGENTS_DISABLE_TDX_CHRONOS_AUTO_ROUTE` escape hatch only.
+- `TRADINGAGENTS_DISABLE_TDX_CHRONOS_AUTO_ROUTE` now parses with the standard `_coerce` boolean rules, so `=0` / `=false` / `=no` / `=off` correctly mean "do not disable" (previously any non-empty string was treated as "disable"). Invalid values raise `ValueError` at first call.
 
 ## [0.3.1] — 2026-07-05
 

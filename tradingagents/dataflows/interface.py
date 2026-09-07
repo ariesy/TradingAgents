@@ -1,6 +1,8 @@
 import logging
 import os
 
+from tradingagents.default_config import _BOOL_FALSE, _BOOL_TRUE
+
 from . import tdx_chronos as _tdx
 from .alpha_vantage import (
     get_balance_sheet as get_alpha_vantage_balance_sheet,
@@ -206,13 +208,37 @@ _TDX_SUPPORTED_METHODS = frozenset({
 })
 
 
+def _tdx_auto_route_disabled() -> bool:
+    """True iff the operator has explicitly turned off TDX auto-route.
+
+    Reads ``TRADINGAGENTS_DISABLE_TDX_CHRONOS_AUTO_ROUTE`` and parses it with the
+    same boolean coercion as :func:`tradingagents.default_config._coerce`, so
+    ``=0``/``=false``/``=no``/``=off`` correctly mean "do not disable". An unset
+    or empty variable preserves the default (auto-route enabled). Any other
+    value raises ``ValueError`` at first call so a typo fails loud.
+    """
+    raw = os.getenv("TRADINGAGENTS_DISABLE_TDX_CHRONOS_AUTO_ROUTE")
+    if raw is None or raw == "":
+        return False
+    normalized = raw.strip().lower()
+    if normalized in _BOOL_FALSE:
+        return False
+    if normalized in _BOOL_TRUE:
+        return True
+    raise ValueError(
+        f"Invalid value for TRADINGAGENTS_DISABLE_TDX_CHRONOS_AUTO_ROUTE: "
+        f"expected a boolean ({'/'.join(_BOOL_TRUE + _BOOL_FALSE)}), got {raw!r}"
+    )
+
+
 def route_to_vendor(method: str, *args, **kwargs):
     """Route method calls to appropriate vendor implementation with fallback support."""
     symbol_arg = args[0] if args else kwargs.get("symbol")
+    tdx_no_data: NoMarketDataError | None = None
     if (
         method in _TDX_SUPPORTED_METHODS
         and symbol_arg
-        and not os.getenv("TRADINGAGENTS_DISABLE_TDX_CHRONOS_AUTO_ROUTE")
+        and not _tdx_auto_route_disabled()
         and _tdx.is_a_share_via_adapter(symbol_arg)
     ):
         adapter = _tdx.get_tdx_adapter()
@@ -220,7 +246,7 @@ def route_to_vendor(method: str, *args, **kwargs):
             try:
                 return adapter.dispatch(method, *args, **kwargs)
             except NoMarketDataError as e:
-                return _no_data_sentinel(e)
+                tdx_no_data = e
     category = get_category_for_method(method)
     vendor_config = get_vendor(category, method)
     primary_vendors = [v.strip() for v in vendor_config.split(',')]
@@ -246,7 +272,7 @@ def route_to_vendor(method: str, *args, **kwargs):
     else:
         vendor_chain = all_available_vendors
 
-    last_no_data: NoMarketDataError | None = None
+    last_no_data: NoMarketDataError | None = tdx_no_data
     first_error: Exception | None = None
     for vendor in vendor_chain:
         vendor_impl = VENDOR_METHODS[method][vendor]
