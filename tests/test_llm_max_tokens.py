@@ -110,13 +110,18 @@ def _reload_with_env(monkeypatch, **overrides):
 
 
 @pytest.mark.unit
-def test_default_is_none(monkeypatch):
+def test_default_is_8192(monkeypatch):
+    # The dev branch sets an explicit 8192 default so DeepSeek V4 thinking
+    # models don't stream an unbounded reasoning chain (#1204). Override via
+    # TRADINGAGENTS_MAX_TOKENS. Upstream v0.4.0 ships this as ``None`` and
+    # relies on each provider's own default; the dev value is a deliberate
+    # production mitigation, not a regression.
     dc = _reload_with_env(monkeypatch)
-    assert dc.DEFAULT_CONFIG["max_tokens"] is None
+    assert dc.DEFAULT_CONFIG["max_tokens"] == 8192
 
 
 @pytest.mark.unit
 def test_env_override_sets_config(monkeypatch):
-    dc = _reload_with_env(monkeypatch, TRADINGAGENTS_MAX_TOKENS="8192")
-    assert dc.DEFAULT_CONFIG["max_tokens"] == "8192"
-    assert _coerce_max_tokens(dc.DEFAULT_CONFIG["max_tokens"]) == 8192
+    dc = _reload_with_env(monkeypatch, TRADINGAGENTS_MAX_TOKENS="16384")
+    assert dc.DEFAULT_CONFIG["max_tokens"] == 16384
+    assert _coerce_max_tokens(dc.DEFAULT_CONFIG["max_tokens"]) == 16384
