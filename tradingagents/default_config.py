@@ -87,8 +87,8 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "memory_log_max_entries": None,
     # LLM settings
     "llm_provider": "openai",
-    "deep_think_llm": "gpt-5.5",
-    "quick_think_llm": "gpt-5.4-mini",
+    "deep_think_llm": "gpt-5.6",
+    "quick_think_llm": "gpt-5.6-luna",
     # When None, each provider's client falls back to its own default endpoint
     # (api.openai.com for OpenAI, generativelanguage.googleapis.com for Gemini, ...).
     # The CLI overrides this per provider when the user picks one. Keeping a
@@ -108,11 +108,14 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # provider/SDK at its own default (usually 2). Raise it to ride out bursty
     # 429 throttling on rate-limited deployments instead of aborting a run (#1091).
     "llm_max_retries": None,
-    # Max output tokens per LLM call. DeepSeek V4 thinking models emit long
+    # Cap on output tokens forwarded to every provider chat client. None leaves
+    # each provider at its own default. Set it to bound a model that emits
+    # unbounded reasoning/output and hangs or trips a gateway idle timeout
+    # (e.g. some deepseek-v4-flash deployments, #1204). The dev branch
+    # defaults to 8192 because DeepSeek V4 thinking models emit long
     # reasoning chains; without an explicit cap the backend can stream the
     # chain indefinitely (gateway idle timeout) or truncate content to empty
-    # (#1204). Default 8192 leaves room for reasoning + content; override via
-    # TRADINGAGENTS_MAX_TOKENS.
+    # (#1204). Override via TRADINGAGENTS_MAX_TOKENS.
     "max_tokens": 8192,
     # Checkpoint/resume: when True, LangGraph saves state after each node
     # so a crashed run can resume from the last successful step.
